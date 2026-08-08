@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chromascope — Tower Stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#14152b;
+    --bg-deep-2:#241b3d;
+    --ink:#f5f1ff;
+    --muted:#8b87a8;
+    --gold:#ffcf5c;
+    --line: rgba(245,241,255,0.12);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background: radial-gradient(120% 140% at 50% -10%, var(--bg-deep-2) 0%, var(--bg-deep) 55%);
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--ink);
+    touch-action: manipulation;
+    user-select: none;
+  }
+  #wrap{
+    position:relative; width:100vw; height:100vh;
+    display:flex; align-items:center; justify-content:center;
+  }
+  canvas{
+    display:block;
+    width:100%; height:100%;
+  }
+  .hud{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding: max(18px, env(safe-area-inset-top)) 20px 0 20px;
+    pointer-events:none;
+  }
+  .score{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size: clamp(40px, 12vw, 64px);
+    line-height:1;
+    letter-spacing:-0.02em;
+    text-shadow: 0 0 30px rgba(255,207,92,0.15);
+    width:100%;
+    text-align:center;
+    position:absolute;
+    left:0; top: max(20px, env(safe-area-inset-top));
+  }
+  .best{
+    font-size:11px;
+    letter-spacing:0.14em;
+    color:var(--muted);
+    text-transform:uppercase;
+    margin-left:auto;
+    text-align:right;
+  }
+  .best b{ color:var(--ink); font-weight:500; }
+  .streak{
+    position:absolute;
+    top: calc(max(20px, env(safe-area-inset-top)) + 74px);
+    left:0; right:0;
+    text-align:center;
+    font-size:12px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color: var(--gold);
+    opacity:0;
+    transition: opacity .25s ease, transform .25s ease;
+    transform: translateY(-4px);
+    pointer-events:none;
+  }
+  .streak.show{ opacity:1; transform:translateY(0); }
+
+  .hint{
+    position:absolute;
+    bottom: max(36px, env(safe-area-inset-bottom));
+    left:0; right:0;
+    text-align:center;
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color: var(--muted);
+    transition: opacity .4s ease;
+    pointer-events:none;
+  }
+
+  .overlay{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(20,21,43,0.0);
+    opacity:0; pointer-events:none;
+    transition: opacity .3s ease, background .3s ease;
+  }
+  .overlay.show{
+    opacity:1; pointer-events:auto;
+    background: rgba(20,21,43,0.55);
+    backdrop-filter: blur(6px);
+  }
+  .card{
+    width: min(320px, 82vw);
+    background: linear-gradient(160deg, rgba(36,27,61,0.9), rgba(20,21,43,0.9));
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 28px 26px 24px;
+    text-align:center;
+    transform: translateY(10px) scale(0.97);
+    transition: transform .3s ease;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+  }
+  .overlay.show .card{ transform: translateY(0) scale(1); }
+  .card .eyebrow{
+    font-size:11px; letter-spacing:0.2em; text-transform:uppercase; color:var(--muted);
+    margin-bottom:6px;
+  }
+  .card .final{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:56px;
+    line-height:1;
+    background: linear-gradient(90deg, var(--gold), #ff6f61);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    margin: 6px 0 14px;
+  }
+  .card .sub{ font-size:12px; color:var(--muted); margin-bottom:22px; letter-spacing:0.05em; }
+  .card .sub b{ color:var(--ink); font-weight:500; }
+  button.retry{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    background: var(--gold);
+    color:#241b0a;
+    border:none;
+    border-radius:999px;
+    padding:13px 28px;
+    font-weight:500;
+    cursor:pointer;
+    transition: transform .15s ease, filter .15s ease;
+  }
+  button.retry:active{ transform: scale(0.96); }
+
+  .title-screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    gap:10px;
+    transition: opacity .3s ease;
+    pointer-events:none;
+  }
+  .title-screen h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size: clamp(34px, 9vw, 46px);
+    margin:0;
+    letter-spacing:-0.02em;
+  }
+  .title-screen p{
+    margin:0;
+    font-size:12px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    max-width:240px;
+  }
+  .title-screen .tap-msg{
+    margin-top:22px;
+    font-size:12px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color: var(--gold);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:0.4; }
+    50%{ opacity:1; }
+  }
+  .hidden{ display:none !important; }
+
+  .mute-btn{
+    position:absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: 20px;
+    width:36px; height:36px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background: rgba(245,241,255,0.06);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    z-index:5;
+    transition: background .15s ease, transform .15s ease;
+  }
+  .mute-btn:active{ transform: scale(0.92); }
+  .mute-btn svg{ width:16px; height:16px; }
+  .mute-btn .icon-on{ display:block; }
+  .mute-btn .icon-off{ display:none; }
+  .mute-btn.muted .icon-on{ display:none; }
+  .mute-btn.muted .icon-off{ display:block; }
+
+  body.snow-mode{ --gold:#bfe9ff; }
+  body.snow-mode #wrap{
+    background: radial-gradient(120% 140% at 50% -10%, #33437a 0%, #161c34 55%);
+  }
+
+  .mode-label{
+    margin-top:20px;
+    font-size:10px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .mode-toggle{
+    display:flex;
+    gap:8px;
+    margin-top:8px;
+    pointer-events:auto;
+  }
+  .mode-pill{
+    padding:9px 16px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background: rgba(245,241,255,0.05);
+    font-size:12px;
+    letter-spacing:0.04em;
+    color:var(--ink);
+    cursor:pointer;
+    transition: background .15s ease, transform .15s ease, border-color .15s ease;
+  }
+  .mode-pill:active{ transform: scale(0.95); }
+  .mode-pill.active{
+    background: var(--gold);
+    color:#1a1330;
+    border-color: transparent;
+    font-weight:500;
+  }
+
+  .best{
+    pointer-events:auto;
+    cursor:pointer;
+    transition: opacity .15s ease;
+  }
+  .best:active{ opacity:0.6; }
+
+  .name-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .name-input{
+    flex:1;
+    min-width:0;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    background: rgba(245,241,255,0.06);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    color:var(--ink);
+    outline:none;
+  }
+  .name-input:focus{ border-color: var(--gold); }
+  button.submit-btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.06em;
+    background: rgba(245,241,255,0.1);
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 16px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  button.submit-btn:active{ transform: scale(0.96); }
+  .submit-status{
+    font-size:11px;
+    color:var(--muted);
+    min-height:14px;
+    margin-bottom:12px;
+  }
+  button.link-btn{
+    display:block;
+    margin:14px auto 0;
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:4px;
+  }
+
+  .board-list{
+    max-height:46vh;
+    overflow-y:auto;
+    margin: 10px 0 4px;
+    text-align:left;
+  }
+  .board-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 2px;
+    border-bottom:1px solid var(--line);
+    font-size:13px;
+  }
+  .board-row:last-child{ border-bottom:none; }
+  .board-rank{
+    color:var(--muted);
+    width:26px;
+    flex-shrink:0;
+    font-size:12px;
+  }
+  .board-name{
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .board-score{
+    font-weight:600;
+    font-family:'Space Grotesk', sans-serif;
+  }
+  .board-msg{
+    color:var(--muted);
+    font-size:12px;
+    text-align:center;
+    padding:26px 0;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div class="mute-btn" id="muteBtn">
+    <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="#f5f1ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 6a9 9 0 0 1 0 12"></path></svg>
+    <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="#f5f1ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+  </div>
+
+  <div class="hud">
+    <div></div>
+    <div class="best" id="boardBtn">🏆 best<br><b id="bestVal">0</b></div>
+  </div>
+  <div class="score" id="scoreVal">0</div>
+  <div class="streak" id="streakEl">Perfect ×0</div>
+
+  <div class="title-screen" id="titleScreen">
+    <h1>Chromascope</h1>
+    <p>Susun tower setinggi mungkin. Tiap layer naik satu langkah di roda warna.</p>
+    <div class="mode-label">Pilih suasana</div>
+    <div class="mode-toggle" id="modeToggle">
+      <div class="mode-pill" data-mode="rain" id="modeRainBtn">🌧️ Gerimis</div>
+      <div class="mode-pill" data-mode="snow" id="modeSnowBtn">❄️ Salju</div>
+    </div>
+    <div class="tap-msg">Ketuk layar untuk mulai</div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <div class="eyebrow">Tower runtuh</div>
+      <div class="final" id="finalScore">0</div>
+      <div class="sub">Terbaik: <b id="finalBest">0</b> layer</div>
+      <div class="name-row" id="nameRow">
+        <input type="text" id="nameInput" class="name-input" placeholder="Nama kamu" maxlength="14">
+        <button class="submit-btn" id="submitScoreBtn">Kirim</button>
+      </div>
+      <div class="submit-status" id="submitStatus"></div>
+      <button class="retry" id="retryBtn">Coba lagi</button>
+      <button class="link-btn" id="boardLinkBtn">Lihat papan skor</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="boardOverlay">
+    <div class="card">
+      <div class="eyebrow">🏆 Papan Skor</div>
+      <div class="board-list" id="boardList"></div>
+      <button class="retry" id="boardCloseBtn">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('scoreVal');
+  const bestEl = document.getElementById('bestVal');
+  const streakEl = document.getElementById('streakEl');
+  const overlay = document.getElementById('overlay');
+  const finalScoreEl = document.getElementById('finalScore');
+  const finalBestEl = document.getElementById('finalBest');
+  const retryBtn = document.getElementById('retryBtn');
+  const titleScreen = document.getElementById('titleScreen');
+  const muteBtn = document.getElementById('muteBtn');
+  const modeRainBtn = document.getElementById('modeRainBtn');
+  const modeSnowBtn = document.getElementById('modeSnowBtn');
+  const boardBtn = document.getElementById('boardBtn');
+  const boardOverlay = document.getElementById('boardOverlay');
+  const boardList = document.getElementById('boardList');
+  const boardCloseBtn = document.getElementById('boardCloseBtn');
+  const boardLinkBtn = document.getElementById('boardLinkBtn');
+  const nameRow = document.getElementById('nameRow');
+  const nameInput = document.getElementById('nameInput');
+  const submitScoreBtn = document.getElementById('submitScoreBtn');
+  const submitStatus = document.getElementById('submitStatus');
+
+  let MODE = localStorage.getItem('chromascope_mode') || 'rain';
+  let frameT = 0;
+
+  // ---------- LEADERBOARD ----------
+  // GitHub Pages itu hosting statis (gak ada server/database sendiri), jadi biar
+  // semua pemain bisa liat papan skor yang SAMA, kita titip datanya di Firebase
+  // Realtime Database (gratis) lewat REST API biasa — gak perlu SDK, gak perlu
+  // login buat pemain. Ganti URL di bawah dengan URL Realtime Database kamu
+  // sendiri (lihat catatan setup di akhir chat).
+  const LEADERBOARD_URL = 'PASTE_FIREBASE_REALTIME_DATABASE_URL_KAMU_DI_SINI/leaderboard.json';
+  // contoh: 'https://nama-project-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json'
+
+  const Leaderboard = (function(){
+    function isConfigured(){
+      return LEADERBOARD_URL && !LEADERBOARD_URL.includes('PASTE_FIREBASE');
+    }
+    async function fetchTop(n){
+      if(!isConfigured()) throw new Error('not-configured');
+      const res = await fetch(`${LEADERBOARD_URL}?orderBy=${encodeURIComponent('"score"')}&limitToLast=${n}`);
+      if(!res.ok) throw new Error('fetch-failed');
+      const data = await res.json();
+      if(!data) return [];
+      const list = Object.values(data);
+      list.sort((a,b)=> b.score - a.score);
+      return list;
+    }
+    async function submit(name, score){
+      if(!isConfigured()) throw new Error('not-configured');
+      const res = await fetch(LEADERBOARD_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.slice(0,14), score: Math.floor(score), ts: Date.now() })
+      });
+      if(!res.ok) throw new Error('submit-failed');
+      return res.json();
+    }
+    return { isConfigured, fetchTop, submit };
+  })();
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  let DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  let W, H;
+  let rainDrops = [];
+  let snowFlakes = [];
+
+  function spawnDrop(fromTop){
+    const depth = Math.random(); // 0 = jauh/samar, 1 = dekat/jelas — buat kesan gerimis berlapis
+    return {
+      x: Math.random()*W,
+      y: fromTop ? -20 - Math.random()*40 : Math.random()*H,
+      len: 7 + depth*11,
+      speed: 2.6 + depth*3.4,
+      drift: 0.5 + depth*1.1,
+      alpha: 0.06 + depth*0.16,
+      width: 0.6 + depth*0.7
+    };
+  }
+  function initRain(){
+    const count = Math.floor((W*H)/16000);
+    rainDrops = [];
+    for(let i=0;i<count;i++) rainDrops.push(spawnDrop(false));
+  }
+
+  function spawnFlake(fromTop){
+    const depth = Math.random(); // 0 = jauh/kecil/pelan, 1 = dekat/besar/cepat
+    return {
+      x: Math.random()*W,
+      y: fromTop ? -10 - Math.random()*30 : Math.random()*H,
+      r: 1.3 + depth*2.6,
+      speed: 0.6 + depth*1.3,
+      angle: Math.random()*Math.PI*2,
+      swaySpeed: 0.01 + Math.random()*0.02,
+      alpha: 0.25 + depth*0.5
+    };
+  }
+  function initSnow(){
+    const count = Math.floor((W*H)/9000);
+    snowFlakes = [];
+    for(let i=0;i<count;i++) snowFlakes.push(spawnFlake(false));
+  }
+
+  function initPrecip(){
+    if(MODE === 'snow') initSnow(); else initRain();
+  }
+
+  function resize(){
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    initPrecip();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const STORAGE_KEY = 'chromascope_best';
+  let best = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+  bestEl.textContent = best;
+
+  const BLOCK_H = 34;
+  const BASE_SPEED = 2.6;
+  let baseWidth;
+
+  function hueColor(hue, l){
+    return `hsl(${hue % 360}, 62%, ${l||50}%)`;
+  }
+
+  function makeDroplets(){
+    const n = 3 + Math.floor(Math.random()*4);
+    const arr = [];
+    for(let i=0;i<n;i++){
+      arr.push({
+        fx: 0.1 + Math.random()*0.8,
+        fy: 0.2 + Math.random()*0.55,
+        r: 1 + Math.random()*2,
+        a: 0.15 + Math.random()*0.22
+      });
+    }
+    return arr;
+  }
+
+  let blocks, current, score, streak, state, camY, particles, fallingPieces, splashes, shakeT;
+
+  function resetGame(){
+    baseWidth = Math.min(W * 0.6, 260);
+    const startHue = 195;
+    blocks = [{
+      x: W/2 - baseWidth/2,
+      width: baseWidth,
+      hue: startHue,
+      droplets: makeDroplets()
+    }];
+    score = 0;
+    streak = 0;
+    camY = 0;
+    particles = [];
+    fallingPieces = [];
+    splashes = [];
+    shakeT = 0;
+    spawnNext();
+    scoreEl.textContent = 0;
+    streakEl.classList.remove('show');
+    state = 'ready';
+  }
+
+  function spawnNext(){
+    const prev = blocks[blocks.length-1];
+    const hue = 195 + blocks.length * 9;
+    const speed = Math.min(BASE_SPEED + score * 0.09, 8.5);
+    const fromLeft = blocks.length % 2 === 0;
+    current = {
+      x: fromLeft ? -prev.width : W,
+      width: prev.width,
+      hue,
+      dir: fromLeft ? 1 : -1,
+      speed,
+      entered: false,
+      droplets: makeDroplets()
+    };
+  }
+
+  function spawnSplash(cx, y, w){
+    const n = 6 + Math.floor(Math.random()*4);
+    const snow = MODE === 'snow';
+    for(let i=0;i<n;i++){
+      const a = -Math.PI*0.7 + Math.random()*Math.PI*0.4 - Math.PI/2;
+      const sp = snow ? 0.6 + Math.random()*1.2 : 1.2 + Math.random()*2.2;
+      splashes.push({
+        x: cx + (Math.random()-0.5)*w*0.6,
+        y,
+        vx: Math.cos(a)*sp,
+        vy: -Math.abs(Math.sin(a)*sp) - (snow ? 0.4 : 0.8),
+        life: 1,
+        snow
+      });
+    }
+  }
+
+  function place(){
+    if(state !== 'playing') return;
+    const prev = blocks[blocks.length-1];
+    const overlapLeft = Math.max(current.x, prev.x);
+    const overlapRight = Math.min(current.x + current.width, prev.x + prev.width);
+    const overlapWidth = overlapRight - overlapLeft;
+
+    if(overlapWidth <= 3){
+      // total miss
+      fallingPieces.push({x:current.x, y: blockScreenY(blocks.length), width: current.width, hue: current.hue, vy: 0, vx: current.dir*2, rot:0, vrot:(Math.random()-0.5)*0.2});
+      endGame();
+      return;
+    }
+
+    const isPerfect = overlapWidth >= Math.min(current.width, prev.width) - 4;
+
+    // falling chunk
+    if(current.x < overlapLeft){
+      const w = overlapLeft - current.x;
+      if(w > 1) fallingPieces.push({x:current.x, y: blockScreenY(blocks.length), width:w, hue: current.hue, vy:0, vx:-2, rot:0, vrot:-0.15});
+    }
+    if(current.x + current.width > overlapRight){
+      const w = (current.x+current.width) - overlapRight;
+      if(w > 1) fallingPieces.push({x:overlapRight, y: blockScreenY(blocks.length), width:w, hue: current.hue, vy:0, vx:2, rot:0, vrot:0.15});
+    }
+
+    let newWidth = overlapWidth;
+    let newX = overlapLeft;
+
+    if(isPerfect){
+      streak++;
+      newWidth = prev.width;
+      newX = prev.x;
+      spawnParticles(newX + newWidth/2, blockScreenY(blocks.length));
+      AudioModule.perfect();
+      if(streak > 0 && streak % 7 === 0){
+        const bonus = Math.min(40, baseWidth - newWidth);
+        newWidth += bonus;
+        newX -= bonus/2;
+      }
+    } else {
+      streak = 0;
+      AudioModule.place();
+    }
+
+    spawnSplash(newX + newWidth/2, blockScreenY(blocks.length), newWidth);
+    blocks.push({x:newX, width:newWidth, hue: current.hue, droplets: current.droplets});
+    score++;
+    scoreEl.textContent = score;
+
+    if(streak >= 2){
+      streakEl.textContent = `Perfect ×${streak}`;
+      streakEl.classList.add('show');
+    } else {
+      streakEl.classList.remove('show');
+    }
+
+    if(newWidth < 6){
+      endGame();
+      return;
+    }
+
+    // camera follow
+    const visibleLayers = Math.floor((H*0.62) / BLOCK_H);
+    if(blocks.length > visibleLayers){
+      camY = (blocks.length - visibleLayers) * BLOCK_H;
+    }
+
+    spawnNext();
+  }
+
+  function blockScreenY(index){
+    return H*0.78 - (index * BLOCK_H) + camY;
+  }
+
+  function spawnParticles(x,y){
+    for(let i=0;i<14;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = 1.5 + Math.random()*2.5;
+      particles.push({x,y,vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, hue: current.hue});
+    }
+  }
+
+  function endGame(){
+    state = 'over';
+    AudioModule.gameOver();
+    if(score > best){
+      best = score;
+      localStorage.setItem(STORAGE_KEY, String(best));
+    }
+    bestEl.textContent = best;
+    finalScoreEl.textContent = score;
+    finalBestEl.textContent = best;
+    submitStatus.textContent = '';
+    nameRow.style.display = score > 0 ? 'flex' : 'none';
+    setTimeout(()=>{ overlay.classList.add('show'); }, 550);
+    shakeT = 12;
+  }
+
+  function handleTapFixed(){
+    if(state === 'ready'){
+      state = 'playing';
+      titleScreen.classList.add('hidden');
+      AudioModule.init();
+      return;
+    }
+    if(state === 'playing'){
+      place();
+    }
+  }
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    handleTapFixed();
+  });
+  window.addEventListener('keydown', (e)=>{
+    if(e.code === 'Space'){
+      e.preventDefault();
+      handleTapFixed();
+    }
+  });
+  retryBtn.addEventListener('click', ()=>{
+    overlay.classList.remove('show');
+    titleScreen.classList.remove('hidden');
+    resetGame();
+  });
+
+  // ---------- AUDIO ENGINE ----------
+  // Semua suara di-generate langsung (bukan file), jadi loop-nya seamless
+  // secara alami: hujan = filtered noise buffer dengan crossfade di titik
+  // sambung, pad = synth chord yang terus dijadwalkan ulang.
+  const AudioModule = (function(){
+    let ctx = null;
+    let master, rainGain, windGain, padGain, sfxGain;
+    let started = false;
+    let muted = localStorage.getItem('chromascope_muted') === '1';
+    let padTimer = null, twinkleTimer = null;
+
+    function init(){
+      if(started) return;
+      started = true;
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 1;
+      master.connect(ctx.destination);
+
+      rainGain = ctx.createGain();
+      rainGain.gain.value = 0;
+      rainGain.connect(master);
+      windGain = ctx.createGain();
+      windGain.gain.value = 0;
+      windGain.connect(master);
+      padGain = ctx.createGain();
+      padGain.gain.value = 0;
+      padGain.connect(master);
+      sfxGain = ctx.createGain();
+      sfxGain.gain.value = 0.5;
+      sfxGain.connect(master);
+
+      startRain();
+      startWind();
+      startPad();
+      startTwinkle();
+
+      // fade in gently — pilih bed suara sesuai mode aktif
+      const snow = MODE === 'snow';
+      rainGain.gain.linearRampToValueAtTime(snow ? 0 : 0.3325, ctx.currentTime + 2.5);
+      windGain.gain.linearRampToValueAtTime(snow ? 0.3 : 0, ctx.currentTime + 2.5);
+      padGain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 3.5);
+    }
+
+    // crossfade antara bed hujan & angin salju ketika mode diganti
+    function setMode(m){
+      if(!ctx) return; // belum start audio, init() nanti yang pilih target awal
+      const now = ctx.currentTime;
+      rainGain.gain.cancelScheduledValues(now);
+      windGain.gain.cancelScheduledValues(now);
+      rainGain.gain.linearRampToValueAtTime(m === 'snow' ? 0 : 0.3325, now + 1.2);
+      windGain.gain.linearRampToValueAtTime(m === 'snow' ? 0.3 : 0, now + 1.2);
+    }
+
+    // Noise pink seamless (dipakai bareng buat hujan & angin) — buffer pendek
+    // di-loop dengan crossfade di titik sambungan biar gak ada "klik".
+    function createPinkNoiseBuffer(dur){
+      const rate = ctx.sampleRate;
+      const buffer = ctx.createBuffer(2, dur*rate, rate);
+      for(let ch=0; ch<2; ch++){
+        const data = buffer.getChannelData(ch);
+        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+        for(let i=0;i<data.length;i++){
+          const white = Math.random()*2-1;
+          b0 = 0.99886*b0 + white*0.0555179;
+          b1 = 0.99332*b1 + white*0.0750759;
+          b2 = 0.96900*b2 + white*0.1538520;
+          b3 = 0.86650*b3 + white*0.3104856;
+          b4 = 0.55000*b4 + white*0.5329522;
+          b5 = -0.7616*b5 - white*0.0168980;
+          const pink = b0+b1+b2+b3+b4+b5+b6+white*0.5362;
+          b6 = white*0.115926;
+          data[i] = pink * 0.11;
+        }
+        const fadeLen = Math.floor(rate*0.8);
+        for(let i=0;i<fadeLen;i++){
+          const t = i/fadeLen;
+          const idx = data.length - fadeLen + i;
+          data[idx] = data[idx]*(1-t) + data[i]*t;
+        }
+      }
+      return buffer;
+    }
+
+    // Seamless rain: pink noise difilter biar kerasa gerimis lembut
+    function startRain(){
+      const buffer = createPinkNoiseBuffer(6);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.value = 2600;
+      const highpass = ctx.createBiquadFilter();
+      highpass.type = 'highpass';
+      highpass.frequency.value = 220;
+
+      // slow amplitude drift so rain "breathes" like gusts
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.06;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.08;
+      const drift = ctx.createGain();
+      drift.gain.value = 1;
+      lfo.connect(lfoGain);
+      lfoGain.connect(drift.gain);
+      lfo.start();
+
+      src.connect(highpass);
+      highpass.connect(lowpass);
+      lowpass.connect(drift);
+      drift.connect(rainGain);
+      src.start();
+    }
+
+    // Angin salju: noise sama tapi difilter lebih rendah & bulat, drift lebih
+    // pelan & dalam — kesan hembusan angin dingin, bukan rintik air.
+    function startWind(){
+      const buffer = createPinkNoiseBuffer(7);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.value = 700;
+      const highpass = ctx.createBiquadFilter();
+      highpass.type = 'highpass';
+      highpass.frequency.value = 60;
+
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.035;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.2;
+      const drift = ctx.createGain();
+      drift.gain.value = 1;
+      lfo.connect(lfoGain);
+      lfoGain.connect(drift.gain);
+      lfo.start();
+
+      src.connect(highpass);
+      highpass.connect(lowpass);
+      lowpass.connect(drift);
+      drift.connect(windGain);
+      src.start();
+    }
+
+    // Warm, slow ambient pad chords — original chill/wintery mood,
+    // not based on any existing recording.
+    const chords = [
+      [130.81, 164.81, 196.00, 246.94], // Cmaj7-ish
+      [110.00, 130.81, 174.61, 220.00], // Am7-ish
+      [174.61, 220.00, 261.63, 329.63], // Fmaj7-ish
+      [196.00, 246.94, 293.66, 369.99]  // G6-ish
+    ];
+    let chordIdx = 0;
+
+    function playChord(freqs, dur){
+      const now = ctx.currentTime;
+      freqs.forEach((f, i)=>{
+        const osc = ctx.createOscillator();
+        osc.type = i === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = f;
+        const g = ctx.createGain();
+        g.gain.value = 0;
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'lowpass';
+        filt.frequency.value = 1200;
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(padGain);
+        g.gain.linearRampToValueAtTime(0.16/freqs.length, now + dur*0.35);
+        g.gain.linearRampToValueAtTime(0, now + dur*0.98);
+        osc.start(now);
+        osc.stop(now + dur);
+      });
+    }
+
+    function startPad(){
+      const dur = 9;
+      const tick = ()=>{
+        if(!muted) playChord(chords[chordIdx % chords.length], dur);
+        else chordIdx += 0; // still advance silently below
+        chordIdx++;
+        padTimer = setTimeout(tick, dur*1000*0.82);
+      };
+      tick();
+    }
+
+    // Sparse high "snowflake" twinkle notes — lebih rapat & terang di mode salju
+    const pentatonic = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+    function startTwinkle(){
+      const tick = ()=>{
+        const snow = MODE === 'snow';
+        if(!muted && Math.random() < 0.85){
+          const now = ctx.currentTime;
+          const f = pentatonic[Math.floor(Math.random()*pentatonic.length)];
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = snow ? f*2 : f;
+          const g = ctx.createGain();
+          g.gain.value = 0;
+          osc.connect(g);
+          g.connect(padGain);
+          g.gain.linearRampToValueAtTime(snow ? 0.04 : 0.05, now+0.05);
+          g.gain.exponentialRampToValueAtTime(0.0001, now+1.8);
+          osc.start(now);
+          osc.stop(now+1.9);
+        }
+        const base = snow ? 2200 : 3500;
+        const span = snow ? 3000 : 5000;
+        twinkleTimer = setTimeout(tick, base + Math.random()*span);
+      };
+      tick();
+    }
+
+    function sfxTick(freq, dur, type){
+      if(!ctx || muted) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = type || 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.value = 0.0001;
+      osc.connect(g);
+      g.connect(sfxGain);
+      g.gain.exponentialRampToValueAtTime(0.4, now+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+      osc.start(now);
+      osc.stop(now+dur+0.02);
+    }
+
+    // Ledakan noise pendek dengan decay bawaan — dasar buat cipratan air & retakan es
+    function burst(dur, freq, q, level, delayMs){
+      if(!ctx || muted) return;
+      const rate = ctx.sampleRate;
+      const len = Math.max(1, Math.floor(dur*rate));
+      const buffer = ctx.createBuffer(1, len, rate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<len;i++){
+        const decay = Math.pow(1 - i/len, 1.7); // sedikit lebih panjang, ada "body"-nya
+        data[i] = (Math.random()*2-1) * decay;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.value = freq;
+      filt.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.value = level;
+      src.connect(filt);
+      filt.connect(g);
+      g.connect(sfxGain);
+      src.start(ctx.currentTime + (delayMs||0)/1000);
+    }
+
+    // Naruh blok yang tidak perfect: beda bunyi tergantung mode, dengan variasi
+    // pitch & timing acak tiap kali biar gak kedengeran ngulang persis (lebih ASMR)
+    function place(){
+      if(MODE === 'snow'){
+        const pitch = 500 + Math.random()*70;
+        sfxTick(pitch, 0.11, 'triangle');       // blok es, ada sedikit tail
+        sfxTick(pitch*1.5, 0.07, 'sine');        // overtone kaca tipis di atasnya
+        burst(0.045, 220, 1.3, 0.13, 0);         // thump rendah, kasih "berat" di bawah crunch
+        const n = 6 + Math.floor(Math.random()*3);
+        for(let i=0;i<n;i++){
+          const t = i * (13 + Math.random()*11);
+          const f = 3600 + Math.random()*3400;
+          burst(0.03 + Math.random()*0.025, f, 5 + Math.random()*4, 0.14 + Math.random()*0.12, t);
+        }
+      } else {
+        sfxTick(270 + Math.random()*35, 0.13, 'triangle'); // thock hangat, tail dikit lebih panjang
+        burst(0.1, 250, 1.2, 0.16, 3);                      // "plop" rendah, badan air
+        const n = 4 + Math.floor(Math.random()*3);
+        for(let i=0;i<n;i++){
+          const t = i * (17 + Math.random()*20);
+          const f = 1700 + Math.random()*2800;
+          burst(0.09 + Math.random()*0.06, f, 1 + Math.random()*1.3, 0.15 + Math.random()*0.13, t);
+        }
+      }
+    }
+    function perfect(){ sfxTick(660, 0.22, 'sine'); setTimeout(()=>sfxTick(880,0.22,'sine'), 60); }
+    function gameOver(){ sfxTick(160, 0.5, 'sawtooth'); }
+
+    function setMuted(v){
+      muted = v;
+      localStorage.setItem('chromascope_muted', v ? '1':'0');
+      if(master){
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.linearRampToValueAtTime(v?0:1, ctx.currentTime+0.25);
+      }
+      muteBtn.classList.toggle('muted', v);
+    }
+
+    return { init, place, perfect, gameOver, setMuted, isMuted: ()=>muted, setMode };
+  })();
+
+  muteBtn.classList.toggle('muted', AudioModule.isMuted());
+  muteBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    AudioModule.setMuted(!AudioModule.isMuted());
+  });
+
+  function updateModeUI(){
+    modeRainBtn.classList.toggle('active', MODE === 'rain');
+    modeSnowBtn.classList.toggle('active', MODE === 'snow');
+    document.body.classList.toggle('snow-mode', MODE === 'snow');
+  }
+
+  function setMode(m){
+    if(m === MODE) return;
+    MODE = m;
+    localStorage.setItem('chromascope_mode', MODE);
+    updateModeUI();
+    initPrecip();
+    AudioModule.setMode(MODE);
+  }
+
+  modeRainBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    setMode('rain');
+  });
+  modeSnowBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    setMode('snow');
+  });
+  updateModeUI();
+
+  // ---------- LEADERBOARD UI ----------
+  nameInput.value = localStorage.getItem('chromascope_name') || '';
+
+  async function openBoard(){
+    boardOverlay.classList.add('show');
+    boardList.innerHTML = '<div class="board-msg">Memuat...</div>';
+    if(!Leaderboard.isConfigured()){
+      boardList.innerHTML = '<div class="board-msg">Papan skor belum diaktifkan developer.</div>';
+      return;
+    }
+    try{
+      const top = await Leaderboard.fetchTop(10);
+      if(!top.length){
+        boardList.innerHTML = '<div class="board-msg">Belum ada skor. Jadilah yang pertama!</div>';
+        return;
+      }
+      boardList.innerHTML = top.map((e,i)=>
+        `<div class="board-row"><span class="board-rank">#${i+1}</span><span class="board-name">${escapeHtml(e.name || '???')}</span><span class="board-score">${e.score}</span></div>`
+      ).join('');
+    } catch(err){
+      boardList.innerHTML = '<div class="board-msg">Gagal memuat papan skor. Cek koneksi internet kamu.</div>';
+    }
+  }
+
+  boardBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(state === 'playing') return; // jangan buka pas lagi main biar gak ganggu
+    openBoard();
+  });
+  boardLinkBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    openBoard();
+  });
+  boardCloseBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    boardOverlay.classList.remove('show');
+  });
+
+  submitScoreBtn.addEventListener('click', async (e)=>{
+    e.stopPropagation();
+    const name = nameInput.value.trim().slice(0,14) || 'Anonim';
+    localStorage.setItem('chromascope_name', name);
+    submitScoreBtn.disabled = true;
+    submitStatus.textContent = 'Mengirim...';
+    try{
+      await Leaderboard.submit(name, score);
+      submitStatus.textContent = 'Terkirim ✓';
+      setTimeout(openBoard, 400);
+    } catch(err){
+      submitStatus.textContent = Leaderboard.isConfigured()
+        ? 'Gagal kirim, coba lagi.'
+        : 'Papan skor belum diaktifkan developer.';
+    }
+    submitScoreBtn.disabled = false;
+  });
+
+  function update(){
+    if(state === 'playing'){
+      current.x += current.dir * current.speed;
+      const min = 0;
+      const max = W - current.width;
+      if(!current.entered){
+        if(current.x >= min && current.x <= max) current.entered = true;
+      } else {
+        if(current.x <= min || current.x >= max){
+          current.dir *= -1;
+          current.x = Math.max(min, Math.min(max, current.x));
+        }
+      }
+    }
+    fallingPieces.forEach(p=>{
+      p.vy += 0.55;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vrot;
+    });
+    fallingPieces = fallingPieces.filter(p=> p.y < H + 100);
+
+    particles.forEach(p=>{
+      p.x += p.vx; p.y += p.vy; p.life -= 0.035;
+    });
+    particles = particles.filter(p=>p.life > 0);
+
+    splashes.forEach(p=>{
+      p.vy += p.snow ? 0.05 : 0.16;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.snow ? 0.03 : 0.04;
+    });
+    splashes = splashes.filter(p=>p.life > 0);
+
+    if(MODE === 'snow'){
+      snowFlakes.forEach(f=>{
+        f.angle += f.swaySpeed;
+        f.x += Math.sin(f.angle)*0.6;
+        f.y += f.speed;
+        if(f.y - f.r > H){
+          Object.assign(f, spawnFlake(true));
+        }
+      });
+    } else {
+      rainDrops.forEach(d=>{
+        d.x += d.drift;
+        d.y += d.speed;
+        if(d.y - d.len > H || d.x > W + 30){
+          Object.assign(d, spawnDrop(true));
+        }
+      });
+    }
+
+    frameT++;
+    if(shakeT > 0) shakeT -= 1;
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  // Balok dengan lapisan "basah": sheen diagonal, bintik air, genangan tipis di bawah
+  function drawWetBlock(b, y){
+    roundRect(b.x, y, b.width, BLOCK_H-4, 4);
+    ctx.save();
+    ctx.clip();
+
+    ctx.fillStyle = hueColor(b.hue, 48);
+    ctx.fillRect(b.x, y, b.width, BLOCK_H-4);
+
+    // top highlight edge
+    ctx.fillStyle = hueColor(b.hue, 66);
+    ctx.fillRect(b.x, y, b.width, 4);
+
+    // diagonal glossy sheen (reflection kena cahaya basah)
+    const sheen = ctx.createLinearGradient(b.x, y, b.x + b.width, y + (BLOCK_H-4));
+    sheen.addColorStop(0, 'rgba(255,255,255,0)');
+    sheen.addColorStop(0.42, 'rgba(255,255,255,0.16)');
+    sheen.addColorStop(0.52, 'rgba(255,255,255,0.03)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen;
+    ctx.fillRect(b.x, y, b.width, BLOCK_H-4);
+
+    // droplet highlights
+    (b.droplets || []).forEach(d=>{
+      const dx = b.x + d.fx * b.width;
+      const dy = y + d.fy * (BLOCK_H-4);
+      const r = d.r;
+      const g = ctx.createRadialGradient(dx - r*0.3, dy - r*0.3, 0.2, dx, dy, r*1.7);
+      g.addColorStop(0, `rgba(255,255,255,${d.a + 0.3})`);
+      g.addColorStop(0.55, `rgba(255,255,255,${d.a})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(dx, dy, r, r*1.25, 0, 0, Math.PI*2);
+      ctx.fill();
+    });
+
+    // genangan tipis di dasar blok
+    const rim = ctx.createLinearGradient(b.x, y + BLOCK_H-14, b.x, y + BLOCK_H-4);
+    rim.addColorStop(0, 'rgba(8,12,26,0)');
+    rim.addColorStop(1, 'rgba(8,12,26,0.32)');
+    ctx.fillStyle = rim;
+    ctx.fillRect(b.x, y + BLOCK_H-14, b.width, 10);
+
+    ctx.restore();
+  }
+
+  // Balok es: translucent, facet diagonal tajam, kilau kristal berkedip, tepi beku
+  function drawIceBlock(b, y){
+    const hue = b.hue % 360;
+    roundRect(b.x, y, b.width, BLOCK_H-4, 4);
+    ctx.save();
+    ctx.clip();
+
+    // base fill — tinted pucat, sedikit translucent
+    ctx.fillStyle = `hsla(${hue}, 40%, 83%, 0.88)`;
+    ctx.fillRect(b.x, y, b.width, BLOCK_H-4);
+
+    // top frost edge, lebih terang
+    ctx.fillStyle = `hsla(${hue}, 58%, 95%, 0.95)`;
+    ctx.fillRect(b.x, y, b.width, 4);
+
+    // facet diagonal tajam (bukan sheen lembut kayak air)
+    const facet = ctx.createLinearGradient(b.x, y, b.x + b.width*0.65, y + (BLOCK_H-4));
+    facet.addColorStop(0, 'rgba(255,255,255,0)');
+    facet.addColorStop(0.48, 'rgba(255,255,255,0.4)');
+    facet.addColorStop(0.58, 'rgba(255,255,255,0.06)');
+    facet.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = facet;
+    ctx.fillRect(b.x, y, b.width, BLOCK_H-4);
+
+    // kilau kristal — berkedip pelan pakai frameT
+    (b.droplets || []).forEach((d,idx)=>{
+      const dx = b.x + d.fx * b.width;
+      const dy = y + d.fy * (BLOCK_H-4);
+      const tw = Math.max(0, 0.25 + 0.35*Math.sin(frameT*0.05 + idx*1.7 + hue));
+      ctx.strokeStyle = `rgba(255,255,255,${tw})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(dx-2.6, dy); ctx.lineTo(dx+2.6, dy);
+      ctx.moveTo(dx, dy-2.6); ctx.lineTo(dx, dy+2.6);
+      ctx.stroke();
+    });
+
+    // rona biru dingin di dasar (ganti genangan gelap)
+    const rim = ctx.createLinearGradient(b.x, y + BLOCK_H-14, b.x, y + BLOCK_H-4);
+    rim.addColorStop(0, 'rgba(150,195,255,0)');
+    rim.addColorStop(1, 'rgba(150,195,255,0.3)');
+    ctx.fillStyle = rim;
+    ctx.fillRect(b.x, y + BLOCK_H-14, b.width, 10);
+
+    ctx.restore();
+
+    // garis tepi beku yang tegas
+    roundRect(b.x, y, b.width, BLOCK_H-4, 4);
+    ctx.strokeStyle = 'rgba(224,242,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  function drawBlock(b, y){
+    if(MODE === 'snow') drawIceBlock(b, y);
+    else drawWetBlock(b, y);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    let shakeX = 0;
+    if(shakeT > 0){
+      shakeX = (Math.random()-0.5) * shakeT * 1.4;
+    }
+    ctx.save();
+    ctx.translate(shakeX, 0);
+
+    const topHue = blocks.length ? blocks[blocks.length-1].hue : 195;
+    const grad = ctx.createRadialGradient(W/2, H*0.35, 10, W/2, H*0.35, W*0.9);
+    if(MODE === 'snow'){
+      grad.addColorStop(0, 'rgba(196,218,255,0.16)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+    } else {
+      grad.addColorStop(0, hueColor(topHue, 18));
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,W,H);
+
+    // kabut tipis biar berasa suasana dingin
+    const fog = ctx.createLinearGradient(0, H*0.5, 0, H);
+    fog.addColorStop(0, 'rgba(170,190,225,0)');
+    fog.addColorStop(1, `rgba(170,190,225,${MODE==='snow' ? 0.1 : 0.07})`);
+    ctx.fillStyle = fog;
+    ctx.fillRect(0,0,W,H);
+
+    // presipitasi — gerimis atau salju, tergantung mode
+    if(MODE === 'snow'){
+      snowFlakes.forEach(f=>{
+        ctx.globalAlpha = f.alpha;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r, 0, Math.PI*2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.lineCap = 'round';
+      rainDrops.forEach(d=>{
+        ctx.strokeStyle = `rgba(196,214,255,${d.alpha})`;
+        ctx.lineWidth = d.width;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - d.drift*2.4, d.y - d.len);
+        ctx.stroke();
+      });
+    }
+
+    // placed blocks
+    blocks.forEach((b, i)=>{
+      const y = blockScreenY(i);
+      if(y > H + BLOCK_H || y < -BLOCK_H) return;
+      drawBlock(b, y);
+    });
+
+    // falling pieces
+    fallingPieces.forEach(p=>{
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - p.y/H*0.3);
+      ctx.translate(p.x + p.width/2, p.y + BLOCK_H/2);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = MODE === 'snow' ? `hsla(${p.hue % 360}, 38%, 84%, 0.85)` : hueColor(p.hue, 44);
+      ctx.fillRect(-p.width/2, -BLOCK_H/2, p.width, BLOCK_H-4);
+      ctx.restore();
+    });
+
+    // current moving block
+    if(state === 'playing' || state === 'ready'){
+      const y = blockScreenY(blocks.length);
+      drawBlock(current, y);
+    }
+
+    // splash droplets / semburan salju (pas blok mendarat)
+    splashes.forEach(p=>{
+      ctx.globalAlpha = Math.max(0, p.life * 0.6);
+      ctx.fillStyle = p.snow ? 'rgba(255,255,255,0.95)' : 'rgba(210,225,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.snow ? 1.6 : 1.8, 0, Math.PI*2);
+      ctx.fill();
+    });
+
+    // particles (perfect pulse)
+    particles.forEach(p=>{
+      ctx.globalAlpha = Math.max(0,p.life);
+      ctx.fillStyle = hueColor(p.hue, 75);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.4, 0, Math.PI*2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+  }
+
+  function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  resetGame();
+  loop();
+})();
+</script>
+</body>
+</html>
